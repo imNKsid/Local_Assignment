@@ -2,7 +2,7 @@ import {
   FlatList,
   Image,
   Linking,
-  Pressable,
+  TouchableOpacity,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -49,8 +49,8 @@ const Home = () => {
       primary_details,
       company_name,
       button_text,
+      contact_preference,
       custom_link,
-      whatsapp_no,
       job_tags,
     } = item;
 
@@ -64,35 +64,78 @@ const Home = () => {
             <Text style={styles.jobTitle}>{title}</Text>
             <Text style={styles.text}>{company_name}</Text>
             <View style={styles.salaryView}>
-              <Text style={styles.text}>{"Salary: "}</Text>
+              <Text style={[styles.text, styles.boldText]}>{"Salary: "}</Text>
               <Text style={styles.text}>{primary_details?.Salary}</Text>
             </View>
             {detailIndex === index ? (
-              <View style={styles.salaryView}>
-                {job_tags.map((item: any, index: number) => {
-                  return (
-                    <View
-                      key={index}
-                      style={[
-                        styles.tagsView,
-                        { backgroundColor: item?.bg_color },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.tagsText, { color: item?.text_color }]}
+              <>
+                <View style={styles.salaryView}>
+                  <Text style={[styles.text, styles.boldText]}>
+                    {"Experience: "}
+                  </Text>
+                  <Text style={styles.text}>{primary_details?.Experience}</Text>
+                </View>
+                <View style={styles.salaryView}>
+                  <Text style={[styles.text, styles.boldText]}>
+                    {"Qualification: "}
+                  </Text>
+                  <Text style={styles.text}>
+                    {primary_details?.Qualification}
+                  </Text>
+                </View>
+                <View style={styles.salaryView}>
+                  {job_tags.map((item: any, index: number) => {
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.tagsView,
+                          {
+                            backgroundColor: item?.bg_color,
+                            marginLeft: index === 0 ? 0 : 10,
+                          },
+                        ]}
                       >
-                        {item?.value}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
+                        <Text
+                          style={[styles.tagsText, { color: item?.text_color }]}
+                        >
+                          {item?.value}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
             ) : null}
-            <Pressable onPress={() => Linking.openURL(custom_link)}>
-              <Text style={styles.text}>{whatsapp_no}</Text>
-            </Pressable>
+            <View style={styles.textNimg}>
+              <TouchableOpacity onPress={() => Linking.openURL(custom_link)}>
+                <Text style={styles.text}>{button_text}</Text>
+              </TouchableOpacity>
+              {detailIndex === index ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() =>
+                      Linking.openURL(contact_preference?.whatsapp_link)
+                    }
+                    style={[styles.salaryView, styles.topFive]}
+                  >
+                    <Image
+                      source={IMAGES.whatsapp}
+                      style={styles.whatsappIcon}
+                    />
+                    <Text style={styles.whatsappNo}>{"Ping on WhatsApp"}</Text>
+                  </TouchableOpacity>
+                  <View style={[styles.salaryView, styles.topFive]}>
+                    <Image source={IMAGES.location} style={styles.pin} />
+                    <Text style={styles.whatsappNo}>
+                      {primary_details?.Place}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
+            </View>
           </View>
-          <Pressable
+          <TouchableOpacity
             onPress={() => {
               if (detailIndex === index) {
                 setDetailIndex(-1);
@@ -105,7 +148,7 @@ const Home = () => {
               source={detailIndex === index ? IMAGES.arrowUp : IMAGES.arrowDown}
               style={styles.arrowIcon}
             />
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -113,11 +156,12 @@ const Home = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>{"Jobs Listed"}</Text>
+      <Text style={styles.header}>{"Job Listings"}</Text>
       <FlatList
         data={data}
         renderItem={renderJob}
         showsVerticalScrollIndicator={false}
+        ListFooterComponent={<View style={{ marginBottom: 50 }} />}
       />
     </SafeAreaView>
   );
@@ -129,9 +173,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.grey,
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "600",
     textAlign: "center",
     marginBottom: 10,
@@ -143,6 +189,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
     padding: 5,
+    paddingLeft: 15,
+    paddingVertical: 10,
   },
   textNimg: {
     flexDirection: "row",
@@ -153,7 +201,7 @@ const styles = StyleSheet.create({
     width: "90%",
   },
   jobTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "500",
     color: COLORS.black,
   },
@@ -162,6 +210,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     marginTop: 5,
   },
+  boldText: { fontSize: 15, fontWeight: "500" },
   salaryView: {
     flexDirection: "row",
     alignItems: "center",
@@ -170,10 +219,24 @@ const styles = StyleSheet.create({
     padding: 5,
     paddingHorizontal: 10,
     borderRadius: 5,
-    marginLeft: 10,
+    marginTop: 5,
   },
   tagsText: {
     color: "#fff",
+  },
+  topFive: { marginTop: 5 },
+  whatsappIcon: {
+    width: 25,
+    height: 25,
+    resizeMode: "contain",
+  },
+  whatsappNo: {
+    marginLeft: 5,
+  },
+  pin: {
+    width: 15,
+    height: 15,
+    resizeMode: "contain",
   },
   arrowIcon: {
     width: 20,
