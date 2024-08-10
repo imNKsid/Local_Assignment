@@ -7,43 +7,52 @@ import {
   StyleSheet,
   Text,
   View,
+  RefreshControl,
+  Button,
+  Dimensions,
+  ActivityIndicator,
 } from "react-native";
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useCallback, useEffect, useState } from "react";
 import { COLORS, IMAGES } from "../assets";
+import { useDispatch } from "react-redux";
+import JobsThunk from "../redux/jobs/jobs-thunk";
+import JobsSelector from "../redux/jobs/jobs-selector";
 
-const API_URL = "https://testapi.getlokalapp.com/common/jobs?page=1";
+const { height } = Dimensions.get("screen");
 
 const Home = () => {
+  const dispatch: any = useDispatch();
+
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [detailIndex, setDetailIndex] = useState(-1);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(false);
-      const res: any = await axios.get(API_URL);
-      //   console.log("res =>", JSON.stringify(res));
-      if (res?.data?.results) {
-        setData(res.data.results);
-        setLoading(false);
-      }
-    } catch (err) {
-      console.log("err =>", err);
-      setLoading(false);
-      setError(true);
-    }
-  };
+  const getJobsSuccess = JobsSelector.getJobsSuccess();
+  const jobsList = JobsSelector.jobsList();
+  const getJobsFailure = JobsSelector.getJobsFailure();
 
+  const fetchData = () => {
+    dispatch(JobsThunk.getJobsData({}));
+  };
   useEffect(() => {
     fetchData();
   }, []);
 
-  const renderJob = ({ item, index }: any) => {
-    console.log("item =>", item);
+  useEffect(() => {
+    console.log("getJobsSuccess =>", getJobsSuccess, getJobsFailure);
 
+    if (getJobsSuccess) {
+      setData(jobsList);
+      setLoading(false);
+    }
+
+    if (getJobsFailure) {
+      setLoading(false);
+    }
+  }, [getJobsSuccess, getJobsFailure]);
+
+  const renderJob = ({ item, index }: any) => {
     const {
       title,
       primary_details,
@@ -154,15 +163,55 @@ const Home = () => {
     );
   };
 
+  const fetchMoreData = useCallback(() => {
+    dispatch(JobsThunk.getJobsData({ page: page + 1, loadMore: true }));
+    setPage((prev) => prev + 1);
+    // console.log("Coming ", page + 1);
+  }, [page]);
+
+  const EmptyList = () => {
+    return (
+      <>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.text}>{"Oops! Retry Again"}</Text>
+          <Button title="Retry" onPress={fetchData} />
+        </View>
+      </>
+    );
+  };
+
+  const onRefresh = useCallback(() => {
+    setLoading(true);
+    dispatch(JobsThunk.getJobsData({ page: 1 }))
+      .then(() => setLoading(false))
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>{"Job Listings"}</Text>
+
       <FlatList
         data={data}
         renderItem={renderJob}
         showsVerticalScrollIndicator={false}
+        onEndReachedThreshold={0.1}
+        onEndReached={fetchMoreData}
         ListFooterComponent={<View style={{ marginBottom: 50 }} />}
+        keyExtractor={(_item, index) => index.toString()}
+        ListEmptyComponent={EmptyList}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={onRefresh} />
+        }
       />
+      {loading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size={50} color={COLORS.black} />
+          <Text style={styles.text}>{"Loading"}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -242,5 +291,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     marginRight: 10,
+  },
+  emptyContainer: {
+    flex: 1,
+    marginTop: height * 0.35,
+  },
+  loader: {
+    flex: 1,
+    zIndex: 5,
+    marginTop: height * 0.35,
   },
 });
