@@ -17,6 +17,7 @@ import { COLORS, IMAGES } from "../assets";
 import { useDispatch } from "react-redux";
 import JobsThunk from "../redux/jobs/jobs-thunk";
 import JobsSelector from "../redux/jobs/jobs-selector";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { height } = Dimensions.get("screen");
 
@@ -27,16 +28,31 @@ const Home = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [detailIndex, setDetailIndex] = useState(-1);
+  const [isListRendered, setIsListRendered] = useState(false);
 
   const getJobsSuccess = JobsSelector.getJobsSuccess();
   const jobsList = JobsSelector.jobsList();
   const getJobsFailure = JobsSelector.getJobsFailure();
 
+  const checkCache = async () => {
+    const time = await AsyncStorage.getItem("cacheTime");
+    console.log("time =>", time);
+
+    if (!time) {
+      console.log("Setting time");
+      AsyncStorage.setItem("cacheTime", Date.now().toString());
+      fetchData();
+    } else if (time && Date.now() - parseInt(time) < 2 * 60 * 60 * 1000) {
+      // do nothing
+    }
+  };
+
   const fetchData = () => {
     dispatch(JobsThunk.getJobsData({}));
   };
+
   useEffect(() => {
-    fetchData();
+    checkCache();
   }, []);
 
   useEffect(() => {
@@ -46,11 +62,21 @@ const Home = () => {
       setData(jobsList);
       setLoading(false);
     }
+  }, [getJobsSuccess, jobsList]);
 
+  useEffect(() => {
     if (getJobsFailure) {
       setLoading(false);
     }
-  }, [getJobsSuccess, getJobsFailure]);
+  }, [getJobsFailure]);
+
+  useEffect(() => {
+    if (loading) {
+      setTimeout(() => {
+        setLoading(false);
+      }, 4000);
+    }
+  }, [loading]);
 
   const renderJob = ({ item, index }: any) => {
     const {
@@ -164,10 +190,14 @@ const Home = () => {
   };
 
   const fetchMoreData = useCallback(() => {
-    dispatch(JobsThunk.getJobsData({ page: page + 1, loadMore: true }));
-    setPage((prev) => prev + 1);
-    // console.log("Coming ", page + 1);
-  }, [page]);
+    if (!isListRendered) return;
+
+    if (page < 3) {
+      dispatch(JobsThunk.getJobsData({ page: page + 1, loadMore: true })).then(
+        () => setPage((prev) => prev + 1)
+      );
+    }
+  }, [isListRendered, page]);
 
   const EmptyList = () => {
     return (
@@ -182,6 +212,7 @@ const Home = () => {
 
   const onRefresh = useCallback(() => {
     setLoading(true);
+    setPage(1);
     dispatch(JobsThunk.getJobsData({ page: 1 }))
       .then(() => setLoading(false))
       .catch(() => {
@@ -197,14 +228,15 @@ const Home = () => {
         data={data}
         renderItem={renderJob}
         showsVerticalScrollIndicator={false}
-        onEndReachedThreshold={0.1}
+        onEndReachedThreshold={0.0}
         onEndReached={fetchMoreData}
-        ListFooterComponent={<View style={{ marginBottom: 50 }} />}
+        onContentSizeChange={() => setIsListRendered(true)}
         keyExtractor={(_item, index) => index.toString()}
         ListEmptyComponent={EmptyList}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={onRefresh} />
         }
+        ListFooterComponent={<View style={{ marginBottom: 50 }} />}
       />
       {loading ? (
         <View style={styles.loader}>
