@@ -10,7 +10,8 @@ import {
   RefreshControl,
   Button,
   Dimensions,
-  ActivityIndicator,
+  StatusBar,
+  Platform,
 } from "react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import { COLORS, IMAGES } from "../assets";
@@ -18,8 +19,10 @@ import { useDispatch } from "react-redux";
 import JobsThunk from "../redux/jobs/jobs-thunk";
 import JobsSelector from "../redux/jobs/jobs-selector";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { JobSearch } from "../components";
 
 const { height } = Dimensions.get("screen");
+const isIOS = Platform.OS === "ios";
 
 const Home = () => {
   const dispatch: any = useDispatch();
@@ -29,26 +32,46 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [detailIndex, setDetailIndex] = useState(-1);
   const [isListRendered, setIsListRendered] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [isSearchActive, setIsSearchActive] = useState(false);
 
   const getJobsSuccess = JobsSelector.getJobsSuccess();
   const jobsList = JobsSelector.jobsList();
   const getJobsFailure = JobsSelector.getJobsFailure();
 
   const checkCache = async () => {
-    const time = await AsyncStorage.getItem("cacheTime");
-    console.log("time =>", time);
+    try {
+      const time = await AsyncStorage.getItem("cacheTime");
+      const jobListData = await AsyncStorage.getItem("cacheData");
+      console.log("time =>", time);
+      console.log("jobListData =>", jobListData?.length);
 
-    if (!time) {
-      console.log("Setting time");
+      if (!time) {
+        console.log("Setting time");
+        AsyncStorage.setItem("cacheTime", Date.now().toString());
+        fetchData();
+      } else if (time && Date.now() - parseInt(time) < 2 * 60 * 60 * 1000) {
+        console.log("Setting previous data");
+        setData(JSON.parse(jobListData ?? ""));
+      } else {
+        console.log("Cache expired: Fetching new data...");
+        fetchData();
+      }
+    } catch (error) {
+      console.error("Error checking cache:", error);
       AsyncStorage.setItem("cacheTime", Date.now().toString());
-      fetchData();
-    } else if (time && Date.now() - parseInt(time) < 2 * 60 * 60 * 1000) {
-      // do nothing
+      fetchData(); // Fetch new data if there's an error with cache
     }
   };
 
   const fetchData = () => {
-    dispatch(JobsThunk.getJobsData({}));
+    setLoading(true);
+    setIsSearchActive(false);
+    dispatch(JobsThunk.getJobsData({}))
+      .then(() => setLoading(false))
+      .catch(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -60,12 +83,14 @@ const Home = () => {
 
     if (getJobsSuccess) {
       setData(jobsList);
+      AsyncStorage.setItem("cacheData", JSON.stringify(jobsList));
       setLoading(false);
     }
   }, [getJobsSuccess, jobsList]);
 
   useEffect(() => {
     if (getJobsFailure) {
+      setData([]);
       setLoading(false);
     }
   }, [getJobsFailure]);
@@ -144,7 +169,9 @@ const Home = () => {
             ) : null}
             <View style={styles.textNimg}>
               <TouchableOpacity onPress={() => Linking.openURL(custom_link)}>
-                <Text style={styles.text}>{button_text}</Text>
+                <Text style={[styles.text, styles.textSize]}>
+                  {button_text}
+                </Text>
               </TouchableOpacity>
               {detailIndex === index ? (
                 <>
@@ -158,11 +185,16 @@ const Home = () => {
                       source={IMAGES.whatsapp}
                       style={styles.whatsappIcon}
                     />
-                    <Text style={styles.whatsappNo}>{"Ping on WhatsApp"}</Text>
+                    <Text style={[styles.whatsappNo, styles.textSize]}>
+                      {"Ping on WhatsApp"}
+                    </Text>
                   </TouchableOpacity>
                   <View style={[styles.salaryView, styles.topFive]}>
                     <Image source={IMAGES.location} style={styles.pin} />
-                    <Text style={styles.whatsappNo}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.whatsappNo, styles.textSize]}
+                    >
                       {primary_details?.Place}
                     </Text>
                   </View>
@@ -189,21 +221,26 @@ const Home = () => {
     );
   };
 
-  const fetchMoreData = useCallback(() => {
+  const fetchMoreData = useCallback(async () => {
     if (!isListRendered) return;
+    if (isSearchActive) {
+      return;
+    }
 
     if (page < 3) {
       dispatch(JobsThunk.getJobsData({ page: page + 1, loadMore: true })).then(
         () => setPage((prev) => prev + 1)
       );
     }
-  }, [isListRendered, page]);
+  }, [isListRendered, isSearchActive, page]);
 
   const EmptyList = () => {
     return (
       <>
         <View style={styles.emptyContainer}>
-          <Text style={styles.text}>{"Oops! Retry Again"}</Text>
+          <Text style={[styles.text, { marginBottom: 10 }]}>
+            {"Oops! Retry Again"}
+          </Text>
           <Button title="Retry" onPress={fetchData} />
         </View>
       </>
@@ -211,38 +248,74 @@ const Home = () => {
   };
 
   const onRefresh = useCallback(() => {
-    setLoading(true);
     setPage(1);
-    dispatch(JobsThunk.getJobsData({ page: 1 }))
-      .then(() => setLoading(false))
-      .catch(() => {
-        setLoading(false);
-      });
+    setIsSearchActive(false);
+    dispatch(JobsThunk.getJobsData({ page: 1 }));
   }, []);
+
+  const handleSearch = () => {
+    let searchMenuItems = [];
+    if (jobTitle.length > 0 && company.length > 0) {
+      searchMenuItems = jobsList.filter((item: any) => {
+        item?.title?.toLowerCase().includes(jobTitle.toLowerCase()) &&
+          item?.company_name?.toLowerCase().includes(company.toLowerCase());
+      });
+    } else if (jobTitle.length > 0) {
+      searchMenuItems = jobsList.filter((item: any) =>
+        item?.title?.toLowerCase().includes(jobTitle.toLowerCase())
+      );
+    } else if (company.length > 0) {
+      searchMenuItems = jobsList.filter((item: any) =>
+        item?.company_name?.toLowerCase().includes(company.toLowerCase())
+      );
+    }
+    console.log("searchMenuItems =>", searchMenuItems?.length);
+
+    setData(searchMenuItems);
+    setShowSearch(false);
+    setIsSearchActive(true);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>{"Job Listings"}</Text>
+      <StatusBar backgroundColor={COLORS.grey} barStyle={"dark-content"} />
+      <View style={styles.header}>
+        <Text style={styles.headerTxt}>{"Job Listings"}</Text>
+        <TouchableOpacity onPress={() => setShowSearch(true)}>
+          <Image source={IMAGES.search} style={styles.searchIcon} />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         data={data}
         renderItem={renderJob}
         showsVerticalScrollIndicator={false}
-        onEndReachedThreshold={0.0}
+        onEndReachedThreshold={0.5}
         onEndReached={fetchMoreData}
         onContentSizeChange={() => setIsListRendered(true)}
         keyExtractor={(_item, index) => index.toString()}
-        ListEmptyComponent={EmptyList}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={onRefresh} />
         }
         ListFooterComponent={<View style={{ marginBottom: 50 }} />}
       />
       {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size={50} color={COLORS.black} />
+        <View style={styles.emptyContainer}>
           <Text style={styles.text}>{"Loading"}</Text>
         </View>
+      ) : data.length === 0 ? (
+        <EmptyList />
+      ) : null}
+      {showSearch ? (
+        <JobSearch
+          isVisible={true}
+          onClose={() => setShowSearch(false)}
+          jobTitle={jobTitle}
+          setJobTitle={setJobTitle}
+          companyName={company}
+          setCompanyName={setCompany}
+          onSearch={handleSearch}
+        />
       ) : null}
     </SafeAreaView>
   );
@@ -254,14 +327,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.grey,
-    justifyContent: "center",
-    alignItems: "center",
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 20,
+    marginBottom: 10,
+  },
+  headerTxt: {
     fontSize: 24,
     fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 10,
+    color: COLORS.black,
+  },
+  searchIcon: {
+    width: 25,
+    height: 25,
   },
   jobBox: {
     backgroundColor: "#FFF",
@@ -312,7 +393,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   whatsappNo: {
-    marginLeft: 5,
+    marginLeft: isIOS ? 5 : 2,
   },
   pin: {
     width: 15,
@@ -326,11 +407,16 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    marginTop: height * 0.35,
+    marginBottom: height * 0.25,
+    alignItems: "center",
   },
   loader: {
     flex: 1,
     zIndex: 5,
-    marginTop: height * 0.35,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  textSize: {
+    fontSize: isIOS ? 14 : 12,
   },
 });
