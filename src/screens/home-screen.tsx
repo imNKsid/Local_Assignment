@@ -257,8 +257,15 @@ const Home = () => {
     let searchMenuItems = [];
     if (jobTitle.length > 0 && company.length > 0) {
       searchMenuItems = jobsList.filter((item: any) => {
-        item?.title?.toLowerCase().includes(jobTitle.toLowerCase()) &&
-          item?.company_name?.toLowerCase().includes(company.toLowerCase());
+        const titleMatches =
+          item?.title &&
+          item.title.toLowerCase().includes(jobTitle.toLowerCase());
+
+        const companyMatches =
+          item?.company_name &&
+          item.company_name.toLowerCase().includes(company.toLowerCase());
+
+        return titleMatches && companyMatches;
       });
     } else if (jobTitle.length > 0) {
       searchMenuItems = jobsList.filter((item: any) =>
