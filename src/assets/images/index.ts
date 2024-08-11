@@ -4,4 +4,5 @@ export const IMAGES = {
   location: require("./location.png"),
   whatsapp: require("./whatsapp.png"),
   search: require("./search.png"),
+  close: require("./close.png"),
 };
